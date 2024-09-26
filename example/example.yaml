@@ -2,7 +2,7 @@ apiVersion: checker.cloudification.io/v1
 kind: Checker
 metadata:
   labels:
-    app.kubernetes.io/name: test
-  name: test
+    app.kubernetes.io/name: githubbing
+  name: githubbing
 spec:
   targetUrl: https://github.com/

@@ -32,10 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var (
-	globalName = "checker"
-)
-
 // CheckerReconciler reconciles a Checker object
 type CheckerReconciler struct {
 	client.Client
@@ -67,7 +63,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	cronJob := &batchv1.CronJob{}
-	cronJobName := types.NamespacedName{Name: globalName, Namespace: req.Namespace}
+	cronJobName := types.NamespacedName{Name: checker.ObjectMeta.Name, Namespace: req.Namespace}
 
 	if err := r.Get(ctx, cronJobName, cronJob); err != nil {
 		if client.IgnoreNotFound(err) != nil {
@@ -78,7 +74,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		newCronJob := &batchv1.CronJob{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      globalName,
+				Name:      checker.ObjectMeta.Name,
 				Namespace: req.Namespace,
 				Labels: map[string]string{
 					"app": "curl-checker",
