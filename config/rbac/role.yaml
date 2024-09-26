@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - checker.cloudification.io
+  resources:
+  - checkers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - checker.cloudification.io
+  resources:
+  - checkers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - checker.cloudification.io
+  resources:
+  - checkers/status
+  verbs:
+  - get
+  - patch
+  - update

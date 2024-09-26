@@ -1,0 +1,9 @@
+apiVersion: checker.cloudification.io/v1
+kind: Checker
+metadata:
+  labels:
+    app.kubernetes.io/name: github-checker-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: checker-sample
+spec:
+  # TODO(user): Add fields here
