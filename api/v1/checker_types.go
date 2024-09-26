@@ -29,13 +29,15 @@ type CheckerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Checker. Edit checker_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	TargetURL string `json:"targetUrl"`
 }
 
 // CheckerStatus defines the observed state of Checker
 type CheckerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	TargetStatus string `json:"targetStatus"`
 }
 
 // +kubebuilder:object:root=true

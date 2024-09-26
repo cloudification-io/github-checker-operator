@@ -5,3 +5,4 @@ metadata:
     app.kubernetes.io/name: test
   name: test
 spec:
+  targetUrl: https://github.com/

@@ -39,13 +39,20 @@ spec:
           spec:
             description: CheckerSpec defines the desired state of Checker
             properties:
-              foo:
+              targetUrl:
                 description: Foo is an example field of Checker. Edit checker_types.go
                   to remove/update
                 type: string
+            required:
+            - targetUrl
             type: object
           status:
             description: CheckerStatus defines the observed state of Checker
+            properties:
+              targetStatus:
+                type: string
+            required:
+            - targetStatus
             type: object
         type: object
     served: true

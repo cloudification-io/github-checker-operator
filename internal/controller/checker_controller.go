@@ -20,11 +20,20 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	checkerv1 "github.com/cloudification-io/github-checker-operator/api/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+var (
+	globalName = "checker"
 )
 
 // CheckerReconciler reconciles a Checker object
@@ -50,9 +59,81 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
-	log.Log.Info("Hello!")
+
+	// Retrieve the Checker resource (CRD)
+	checker := &checkerv1.Checker{}
+	if err := r.Get(ctx, req.NamespacedName, checker); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	cronJob := &batchv1.CronJob{}
+	cronJobName := types.NamespacedName{Name: globalName, Namespace: req.Namespace}
+
+	if err := r.Get(ctx, cronJobName, cronJob); err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			return ctrl.Result{}, err
+		}
+
+		log.Log.Info("Creating CronJob for Checker", "Checker.Name", checker.Name)
+
+		newCronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      globalName,
+				Namespace: req.Namespace,
+				Labels: map[string]string{
+					"app": "curl-checker",
+				},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule:                   "* * * * *",
+				ConcurrencyPolicy:          batchv1.ForbidConcurrent,
+				SuccessfulJobsHistoryLimit: int32Ptr(1),
+				FailedJobsHistoryLimit:     int32Ptr(1),
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "curl",
+										Image: "curlimages/curl:latest",
+										Env: []corev1.EnvVar{
+											{
+												Name:  "TARGET_URL",
+												Value: checker.Spec.TargetURL,
+											},
+										},
+										Command: []string{"sh", "-c"},
+										Args: []string{
+											"curl -o /dev/null -s -w \"%{http_code}\" ${TARGET_URL}",
+										},
+									},
+								},
+								RestartPolicy: corev1.RestartPolicyNever,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if err := r.Create(ctx, newCronJob); err != nil {
+			return ctrl.Result{}, err
+		}
+		log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
+	} else {
+		log.Log.Info("CronJob already exists", "CronJob.Name", cronJob.Name)
+	}
 
 	return ctrl.Result{}, nil
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
 }
 
 // SetupWithManager sets up the controller with the Manager.
