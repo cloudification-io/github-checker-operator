@@ -33,7 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var cronJobLimitPointer int32 = 1
+var cronJobLimitPointer int32 = 0
 
 // CheckerReconciler reconciles a Checker object
 type CheckerReconciler struct {
@@ -142,13 +142,30 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	for _, job := range jobList.Items {
-		log.Log.Info("Job:", "job", job.ObjectMeta.OwnerReferences)
 		if job.Status.Succeeded > 0 {
 			log.Log.Info("Job completed successfully", "Job.Name", job.Name)
 			checker.Status.TargetStatus = "Ok"
 		} else {
 			log.Log.Info("Job failed", "Job.Name", job.Name)
 			checker.Status.TargetStatus = "Not Ok"
+		}
+
+		podList := &corev1.PodList{}
+		if err := r.List(ctx, podList, client.InNamespace(req.Namespace)); err != nil {
+			log.Log.Error(err, "Unable to list Pods for Job", "Job.Name", job.Name)
+			continue
+		}
+
+		for _, pod := range podList.Items {
+			log.Log.Info("Fetching logs for Pod", "Pod.Name", pod.Name)
+			podLogs, err := r.getPodLogs(ctx, pod)
+			if err != nil {
+				log.Log.Error(err, "Unable to get logs for Pod", "Pod.Name", pod.Name)
+				checker.Status.TargetStatus = "Unknown"
+			} else {
+				log.Log.Info("Pod Logs", "Pod.Name", pod.Name, "Logs", podLogs)
+				checker.Status.TargetStatus = podLogs
+			}
 		}
 	}
 
@@ -158,6 +175,10 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *CheckerReconciler) getPodLogs(ctx context.Context, pod corev1.Pod) (string, error) {
+	return "200", nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
