@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,7 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var cronJobLimitPointer int32 = 0
+var cronJobLimitPointer int32 = 1
 
 // CheckerReconciler reconciles a Checker object
 type CheckerReconciler struct {
@@ -79,9 +80,6 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      checker.ObjectMeta.Name,
 				Namespace: req.Namespace,
-				Labels: map[string]string{
-					"app": "curl-checker",
-				},
 			},
 			Spec: batchv1.CronJobSpec{
 				Schedule:                   "* * * * *",
@@ -124,8 +122,39 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 		log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
+
+		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	} else {
-		log.Log.Info("CronJob already exists", "CronJob.Name", cronJob.Name)
+		if cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value != checker.Spec.TargetURL {
+			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value = checker.Spec.TargetURL
+			if err := r.Update(ctx, cronJob); err != nil {
+				return ctrl.Result{}, err
+			}
+			log.Log.Info("CronJob updated successfully", "CronJob.Name", cronJob.Name)
+
+			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+
+	jobList := &batchv1.JobList{}
+	if err := r.List(ctx, jobList, client.InNamespace(req.Namespace)); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	for _, job := range jobList.Items {
+		log.Log.Info("Job:", "job", job.ObjectMeta.OwnerReferences)
+		if job.Status.Succeeded > 0 {
+			log.Log.Info("Job completed successfully", "Job.Name", job.Name)
+			checker.Status.TargetStatus = "Ok"
+		} else {
+			log.Log.Info("Job failed", "Job.Name", job.Name)
+			checker.Status.TargetStatus = "Not Ok"
+		}
+	}
+
+	if err := r.Status().Update(ctx, checker); err != nil {
+		log.Log.Error(err, "unable to update CronJob status")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -135,5 +164,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *CheckerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&checkerv1.Checker{}).
+		Owns(&batchv1.CronJob{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
