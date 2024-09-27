@@ -32,6 +32,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var cronJobLimitPointer int32 = 0
+
 // CheckerReconciler reconciles a Checker object
 type CheckerReconciler struct {
 	client.Client
@@ -55,6 +57,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
+	log.Log.Info("Trigger reconcile:", "req.NamespacedName", req.NamespacedName)
 
 	// Retrieve the Checker resource (CRD)
 	checker := &checkerv1.Checker{}
@@ -82,9 +85,9 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			},
 			Spec: batchv1.CronJobSpec{
 				Schedule:                   "* * * * *",
-				ConcurrencyPolicy:          batchv1.ForbidConcurrent,
-				SuccessfulJobsHistoryLimit: int32Ptr(1),
-				FailedJobsHistoryLimit:     int32Ptr(1),
+				ConcurrencyPolicy:          batchv1.ReplaceConcurrent,
+				SuccessfulJobsHistoryLimit: &cronJobLimitPointer,
+				FailedJobsHistoryLimit:     &cronJobLimitPointer,
 				JobTemplate: batchv1.JobTemplateSpec{
 					Spec: batchv1.JobSpec{
 						Template: corev1.PodTemplateSpec{
@@ -126,10 +129,6 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func int32Ptr(i int32) *int32 {
-	return &i
 }
 
 // SetupWithManager sets up the controller with the Manager.
