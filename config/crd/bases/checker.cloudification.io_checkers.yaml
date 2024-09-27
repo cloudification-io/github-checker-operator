@@ -14,7 +14,12 @@ spec:
     singular: checker
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: The current target status
+      jsonPath: .status.targetStatus
+      name: Target Status
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         description: Checker is the Schema for the checkers API

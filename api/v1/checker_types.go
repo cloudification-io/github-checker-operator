@@ -42,6 +42,7 @@ type CheckerStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Target Status",type=string,JSONPath=".status.targetStatus",description="The current target status"
 
 // Checker is the Schema for the checkers API
 type Checker struct {
