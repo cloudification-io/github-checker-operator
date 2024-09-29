@@ -4,5 +4,6 @@ metadata:
   labels:
     app.kubernetes.io/name: githubbing
   name: githubbing
+  namespace: checker
 spec:
   targetUrl: https://github.com/
