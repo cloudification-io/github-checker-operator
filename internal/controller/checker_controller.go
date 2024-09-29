@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -27,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	checkerv1 "github.com/cloudification-io/github-checker-operator/api/v1"
-	batchv1 "k8s.io/api/batch/v1"
 )
 
 // CheckerReconciler reconciles a Checker object
@@ -64,11 +64,11 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	r.PatchResources(ctx, &req, checker)
-
 	r.CreateResources(ctx, &req, checker)
 
-	r.UpdateStatus(ctx, req, checker)
+	r.PatchResources(ctx, &req, checker)
+
+	r.UpdateStatus(ctx, &req, checker)
 
 	return ctrl.Result{}, nil
 }

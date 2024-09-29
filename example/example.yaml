@@ -2,8 +2,38 @@ apiVersion: checker.cloudification.io/v1
 kind: Checker
 metadata:
   labels:
-    app.kubernetes.io/name: githubbing
-  name: githubbing
+    app.kubernetes.io/name: github
+  name: github
   namespace: checker
 spec:
   targetUrl: https://github.com/
+---
+apiVersion: checker.cloudification.io/v1
+kind: Checker
+metadata:
+  labels:
+    app.kubernetes.io/name: amazon
+  name: amazon
+  namespace: checker
+spec:
+  targetUrl: https://www.amazon.com/
+---
+apiVersion: checker.cloudification.io/v1
+kind: Checker
+metadata:
+  labels:
+    app.kubernetes.io/name: allegro
+  name: allegro
+  namespace: checker
+spec:
+  targetUrl: https://allegro.pl/zobacz/ratyzero
+---
+apiVersion: checker.cloudification.io/v1
+kind: Checker
+metadata:
+  labels:
+    app.kubernetes.io/name: olx
+  name: olx
+  namespace: checker
+spec:
+  targetUrl: https://www.olx.pl/

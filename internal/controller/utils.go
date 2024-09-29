@@ -138,7 +138,7 @@ func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Reques
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 }
 
-func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
+func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
 	if checker.Status.TargetStatus == "" {
 		checker.Status.TargetStatus = unknownStatus
 	}
@@ -172,7 +172,7 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
-		return "", err
+		return unknownStatus, err
 	}
 	defer podLogs.Close()
 
