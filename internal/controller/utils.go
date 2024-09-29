@@ -16,12 +16,29 @@ import (
 )
 
 var cronJobLimitPointer int32 = 1
+var commonLabelKey string = "cloudification.io/checker"
+
+func (r *CheckerReconciler) RenderConfigMap(req *ctrl.Request, checker *checkerv1.Checker) *corev1.ConfigMap {
+	thisConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      checker.ObjectMeta.Name,
+			Namespace: req.Namespace,
+		},
+		Data: map[string]string{
+			"TARGET_URL": checker.Spec.TargetURL,
+		},
+	}
+	return thisConfigMap
+}
 
 func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.Checker) *batchv1.CronJob {
 	thisCronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      checker.ObjectMeta.Name,
 			Namespace: req.Namespace,
+			Labels: map[string]string{
+				commonLabelKey: checker.ObjectMeta.Name,
+			},
 		},
 		Spec: batchv1.CronJobSpec{
 			Schedule:                   "* * * * *",
@@ -31,15 +48,23 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								commonLabelKey: checker.ObjectMeta.Name,
+							},
+						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
 									Name:  "curl",
 									Image: "curlimages/curl:latest",
-									Env: []corev1.EnvVar{
+									EnvFrom: []corev1.EnvFromSource{
 										{
-											Name:  "TARGET_URL",
-											Value: checker.Spec.TargetURL,
+											ConfigMapRef: &corev1.ConfigMapEnvSource{
+												LocalObjectReference: corev1.LocalObjectReference{
+													Name: checker.ObjectMeta.Name,
+												},
+											},
 										},
 									},
 									Command: []string{"sh", "-c"},
@@ -59,33 +84,44 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 }
 
 func (r *CheckerReconciler) CreateResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
-	newCronJob := r.RenderCronJob(req, checker)
-
-	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
+	newConfigMap := r.RenderConfigMap(req, checker)
+	if err := r.Create(ctx, newConfigMap); err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := controllerutil.SetControllerReference(checker, newConfigMap, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+	log.Log.Info("CronJob created successfully", "ConfigMap.Name", newConfigMap.Name)
 
+	newCronJob := r.RenderCronJob(req, checker)
 	if err := r.Create(ctx, newCronJob); err != nil {
 		return ctrl.Result{}, err
 	}
-
+	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
 	log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
 
 	return ctrl.Result{}, nil
 }
 
 func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
+	configMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, req.NamespacedName, configMap); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	patchConfigMap := r.RenderConfigMap(req, checker)
+	if err := r.Update(ctx, patchConfigMap); err != nil {
+		return ctrl.Result{}, err
+	}
+	log.Log.Info("ConfigMap updated successfully", "ConfigMap.Name", configMap.Name)
+
 	cronJob := &batchv1.CronJob{}
 	if err := r.Get(ctx, req.NamespacedName, cronJob); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	if cronJob == r.RenderCronJob(req, checker) {
-		return ctrl.Result{}, nil
-	}
-
-	cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env[0].Value = checker.Spec.TargetURL
-	if err := r.Update(ctx, cronJob); err != nil {
+	patchCronJob := r.RenderCronJob(req, checker)
+	if err := r.Update(ctx, patchCronJob); err != nil {
 		return ctrl.Result{}, err
 	}
 	log.Log.Info("CronJob updated successfully", "CronJob.Name", cronJob.Name)
