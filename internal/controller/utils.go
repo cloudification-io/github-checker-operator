@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,6 +19,7 @@ import (
 
 var cronJobLimitPointer int32 = 1
 var commonLabelKey string = "cloudification.io/checker"
+var unknownStatus string = "Unknown"
 
 func (r *CheckerReconciler) RenderConfigMap(req *ctrl.Request, checker *checkerv1.Checker) *corev1.ConfigMap {
 	thisConfigMap := &corev1.ConfigMap{
@@ -130,49 +133,48 @@ func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Reques
 }
 
 func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
-	jobList := &batchv1.JobList{}
-	if err := r.List(ctx, jobList, client.InNamespace(req.Namespace)); err != nil {
-		return ctrl.Result{}, err
+	if checker.Status.TargetStatus == "" {
+		checker.Status.TargetStatus = unknownStatus
 	}
 
-	for _, job := range jobList.Items {
-		if job.Status.Succeeded > 0 {
-			// log.Log.Info("Job completed successfully", "Job.Name", job.Name)
-			checker.Status.TargetStatus = "Ok"
-		} else {
-			// log.Log.Info("Job failed", "Job.Name", job.Name)
-			checker.Status.TargetStatus = "Not Ok"
-		}
-
-		podList := &corev1.PodList{}
-		if err := r.List(ctx, podList, client.InNamespace(req.Namespace)); err != nil {
-			// log.Log.Error(err, "Unable to list Pods for Job", "Job.Name", job.Name)
-			continue
-		}
-
-		for _, pod := range podList.Items {
-			// log.Log.Info("Fetching logs for Pod", "Pod.Name", pod.Name)
-			podLogs, err := r.getPodLogs(ctx, pod)
-			if err != nil {
-				// log.Log.Error(err, "Unable to get logs for Pod", "Pod.Name", pod.Name)
-				checker.Status.TargetStatus = "Unknown"
-			} else {
-				log.Log.Info("Pod Logs", "Pod.Name", pod.Name, "Logs", podLogs)
-				checker.Status.TargetStatus = podLogs
-			}
-		}
+	status, err := r.getPodLogs(ctx, checker)
+	if err != nil {
+		return ctrl.Result{}, nil
 	}
 
+	checker.Status.TargetStatus = status
 	if err := r.Status().Update(ctx, checker); err != nil {
-		// log.Log.Error(err, "unable to update CronJob status")
+		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
 		return ctrl.Result{}, err
 	}
-
 	log.Log.Info("Status updated successfully", "Checker.Name", checker.Name)
 
 	return ctrl.Result{}, nil
 }
 
-func (r *CheckerReconciler) getPodLogs(ctx context.Context, pod corev1.Pod) (string, error) {
-	return "200", nil
+func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.Checker) (string, error) {
+	podList, err := r.Clientset.CoreV1().Pods(checker.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%v=%s", commonLabelKey, checker.ObjectMeta.Name),
+	})
+	if err != nil || len(podList.Items) < 1 {
+		return unknownStatus, err
+	}
+
+	firstPod := &podList.Items[0]
+
+	req := r.Clientset.CoreV1().Pods(checker.Namespace).GetLogs(firstPod.Name, &corev1.PodLogOptions{})
+
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer podLogs.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(podLogs)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
