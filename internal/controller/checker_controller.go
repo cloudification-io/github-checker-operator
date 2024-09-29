@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	checkerv1 "github.com/cloudification-io/github-checker-operator/api/v1"
+	batchv1 "k8s.io/api/batch/v1"
 )
 
 // CheckerReconciler reconciles a Checker object
@@ -39,6 +40,8 @@ type CheckerReconciler struct {
 // +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -74,6 +77,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *CheckerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&checkerv1.Checker{}).
-		Owns(&corev1.Pod{}).
+		Owns(&batchv1.CronJob{}).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }

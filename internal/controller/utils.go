@@ -88,19 +88,19 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 
 func (r *CheckerReconciler) CreateResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
 	newConfigMap := r.RenderConfigMap(req, checker)
-	if err := r.Create(ctx, newConfigMap); err != nil {
+	if err := controllerutil.SetControllerReference(checker, newConfigMap, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := controllerutil.SetControllerReference(checker, newConfigMap, r.Scheme); err != nil {
+	if err := r.Create(ctx, newConfigMap); err != nil {
 		return ctrl.Result{}, err
 	}
 	log.Log.Info("CronJob created successfully", "ConfigMap.Name", newConfigMap.Name)
 
 	newCronJob := r.RenderCronJob(req, checker)
-	if err := r.Create(ctx, newCronJob); err != nil {
+	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
+	if err := r.Create(ctx, newCronJob); err != nil {
 		return ctrl.Result{}, err
 	}
 	log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
@@ -114,6 +114,9 @@ func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	patchConfigMap := r.RenderConfigMap(req, checker)
+	if err := controllerutil.SetControllerReference(checker, patchConfigMap, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.Update(ctx, patchConfigMap); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -124,6 +127,9 @@ func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	patchCronJob := r.RenderCronJob(req, checker)
+	if err := controllerutil.SetControllerReference(checker, patchCronJob, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.Update(ctx, patchCronJob); err != nil {
 		return ctrl.Result{}, err
 	}
