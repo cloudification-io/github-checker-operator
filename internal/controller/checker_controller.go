@@ -73,7 +73,7 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
 	}
 
-	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

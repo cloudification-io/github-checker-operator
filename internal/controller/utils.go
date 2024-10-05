@@ -205,7 +205,7 @@ func (r *CheckerReconciler) PatchConfigMap(ctx context.Context, req *ctrl.Reques
 func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	status, err := r.getPodLogs(ctx, checker)
 	if err != nil {
-		return nil
+		log.Log.Error(err, "Could not get logs from pod")
 	}
 
 	if err := r.SetStatus(ctx, checker, status); err != nil {
@@ -240,18 +240,12 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 		return unknownStatus, err
 	}
 
-	var latestPod *corev1.Pod
-	for _, pod := range podList.Items {
-		if latestPod == nil || pod.CreationTimestamp.After(latestPod.CreationTimestamp.Time) {
-			latestPod = &pod
-		}
-	}
-	if latestPod == nil {
-		return unknownStatus, fmt.Errorf("no pods found for checker: %s", checker.Name)
+	latestPod, err := r.findLatestPod(podList.Items)
+	if err != nil {
+		return unknownStatus, err
 	}
 
 	log.Log.Info("Looking up logs from found latest pod", "latestPod.Name", latestPod.Name)
-
 	req := r.Clientset.CoreV1().Pods(checker.Namespace).GetLogs(latestPod.Name, &corev1.PodLogOptions{})
 
 	podLogs, err := req.Stream(ctx)
@@ -266,4 +260,20 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 	}
 
 	return buf.String(), nil
+}
+
+func (r *CheckerReconciler) findLatestPod(pods []corev1.Pod) (*corev1.Pod, error) {
+	var latestPod *corev1.Pod
+
+	for _, pod := range pods {
+		if latestPod == nil || pod.CreationTimestamp.After(latestPod.CreationTimestamp.Time) {
+			latestPod = &pod
+		}
+	}
+
+	if latestPod == nil {
+		return nil, fmt.Errorf("no pods found")
+	}
+
+	return latestPod, nil
 }
