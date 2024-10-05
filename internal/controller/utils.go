@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,76 +85,80 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 	return thisCronJob
 }
 
-func (r *CheckerReconciler) CreateResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
+func (r *CheckerReconciler) CreateResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	newConfigMap := r.RenderConfigMap(req, checker)
 	if err := controllerutil.SetControllerReference(checker, newConfigMap, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	if err := r.Create(ctx, newConfigMap); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	log.Log.Info("CronJob created successfully", "ConfigMap.Name", newConfigMap.Name)
 
 	newCronJob := r.RenderCronJob(req, checker)
 	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	if err := r.Create(ctx, newCronJob); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
+func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	configMap := &corev1.ConfigMap{}
 	if err := r.Get(ctx, req.NamespacedName, configMap); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return client.IgnoreNotFound(err)
 	}
 	patchConfigMap := r.RenderConfigMap(req, checker)
 	if err := controllerutil.SetControllerReference(checker, patchConfigMap, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	if err := r.Update(ctx, patchConfigMap); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	log.Log.Info("ConfigMap updated successfully", "ConfigMap.Name", configMap.Name)
 
 	cronJob := &batchv1.CronJob{}
 	if err := r.Get(ctx, req.NamespacedName, cronJob); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return client.IgnoreNotFound(err)
 	}
 	patchCronJob := r.RenderCronJob(req, checker)
 	if err := controllerutil.SetControllerReference(checker, patchCronJob, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	if err := r.Update(ctx, patchCronJob); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	log.Log.Info("CronJob updated successfully", "CronJob.Name", cronJob.Name)
 
-	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+	return nil
 }
 
-func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) (ctrl.Result, error) {
-	if checker.Status.TargetStatus == "" {
-		checker.Status.TargetStatus = unknownStatus
-	}
-
+func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	status, err := r.getPodLogs(ctx, checker)
 	if err != nil {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
+	if err := r.SetStatus(ctx, checker, status); err != nil {
+		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
+		return err
+	}
+
+	log.Log.Info("Status updated successfully", "Checker.Name", checker.Name)
+	return nil
+}
+
+func (r *CheckerReconciler) SetStatus(ctx context.Context, checker *checkerv1.Checker, status string) error {
 	checker.Status.TargetStatus = status
 	if err := r.Status().Update(ctx, checker); err != nil {
 		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
-		return ctrl.Result{}, err
+		return err
 	}
-	log.Log.Info("Status updated successfully", "Checker.Name", checker.Name)
-
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.Checker) (string, error) {

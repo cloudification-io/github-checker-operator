@@ -18,9 +18,9 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -66,20 +66,31 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	r.CreateResources(ctx, &req, checker)
+	fmt.Print(checker)
 
-	r.PatchResources(ctx, &req, checker)
+	if err := r.SetStatus(ctx, checker, unknownStatus); err != nil {
+		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
+		return ctrl.Result{}, err
+	}
 
-	r.UpdateStatus(ctx, &req, checker)
+	// if err := r.UpdateStatus(ctx, &req, checker); err != nil {
+	// 	log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
+	// }
 
-	return ctrl.Result{}, nil
+	// if err := r.CreateResources(ctx, &req, checker); err != nil {
+	// 	log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
+	// }
+
+	// if err := r.PatchResources(ctx, &req, checker); err != nil {
+	// 	log.Log.Error(err, "Could not patch resources", "checker.Name", checker.Name)
+	// }
+
+	return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Second}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CheckerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&checkerv1.Checker{}).
-		Owns(&batchv1.CronJob{}).
-		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }
