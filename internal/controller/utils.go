@@ -61,7 +61,7 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 							Containers: []corev1.Container{
 								{
 									Name:  "curl",
-									Image: "curlimages/curl:latest",
+									Image: "curlimages/curl:8.10.1",
 									EnvFrom: []corev1.EnvFromSource{
 										{
 											ConfigMapRef: &corev1.ConfigMapEnvSource{
