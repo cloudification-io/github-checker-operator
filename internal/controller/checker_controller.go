@@ -36,13 +36,14 @@ type CheckerReconciler struct {
 	Clientset *kubernetes.Clientset
 }
 
-// +kubebuilder:rbac:groups=checker.cloudification.io,namespace=checker,resources=checkers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=checker.cloudification.io,namespace=checker,resources=checkers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=checker.cloudification.io,namespace=checker,resources=checkers/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,namespace=checker,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=batch,namespace=checker,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=coordination.k8s.io,namespace=checker,resources=leases,verbs=get;list;watch;create;update;delete
-// +kubebuilder:rbac:groups="",namespace=checker,resources=events,verbs=create;patch;update;watch;list;get;delete
+// +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=checker.cloudification.io,resources=checkers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get;list
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
