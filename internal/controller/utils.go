@@ -85,24 +85,75 @@ func (r *CheckerReconciler) RenderCronJob(req *ctrl.Request, checker *checkerv1.
 	return thisCronJob
 }
 
-func (r *CheckerReconciler) CreateResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
+func (r *CheckerReconciler) CheckIfResourceExists(ctx context.Context, req *ctrl.Request, resource client.Object) (bool, error) {
+	err := r.Get(ctx, req.NamespacedName, resource)
+	if err == nil {
+		return true, nil
+	}
+	if client.IgnoreNotFound(err) == nil {
+		return false, nil
+	}
+	return false, err
+}
+
+func (r *CheckerReconciler) CreateConfigMap(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	newConfigMap := r.RenderConfigMap(req, checker)
+
+	exists, err := r.CheckIfResourceExists(ctx, req, newConfigMap)
+	if err != nil {
+		return fmt.Errorf("failed to check ConfigMap existence: %w", err)
+	}
+	if exists {
+		log.Log.Info("ConfigMap already exists, skipping creation", "ConfigMap.Name", newConfigMap.Name)
+		return nil
+	}
+
 	if err := controllerutil.SetControllerReference(checker, newConfigMap, r.Scheme); err != nil {
 		return err
 	}
 	if err := r.Create(ctx, newConfigMap); err != nil {
-		return err
+		if client.IgnoreNotFound(err) != nil {
+			return err
+		}
 	}
-	log.Log.Info("CronJob created successfully", "ConfigMap.Name", newConfigMap.Name)
+	log.Log.Info("ConfigMap created successfully", "ConfigMap.Name", newConfigMap.Name)
 
+	return nil
+}
+
+func (r *CheckerReconciler) CreateCronJob(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	newCronJob := r.RenderCronJob(req, checker)
+
+	exists, err := r.CheckIfResourceExists(ctx, req, newCronJob)
+	if err != nil {
+		return fmt.Errorf("failed to check CronJob existence: %w", err)
+	}
+	if exists {
+		log.Log.Info("CronJob already exists, skipping creation", "CronJob.Name", newCronJob.Name)
+		return nil
+	}
+
 	if err := controllerutil.SetControllerReference(checker, newCronJob, r.Scheme); err != nil {
 		return err
 	}
 	if err := r.Create(ctx, newCronJob); err != nil {
-		return err
+		if client.IgnoreNotFound(err) != nil {
+			return err
+		}
 	}
 	log.Log.Info("CronJob created successfully", "CronJob.Name", newCronJob.Name)
+
+	return nil
+}
+
+func (r *CheckerReconciler) ReconcileResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
+	if err := r.CreateConfigMap(ctx, req, checker); err != nil {
+		return err
+	}
+
+	if err := r.CreateCronJob(ctx, req, checker); err != nil {
+		return err
+	}
 
 	return nil
 }

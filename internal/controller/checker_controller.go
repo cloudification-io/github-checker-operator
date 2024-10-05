@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,8 +65,6 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	fmt.Print(checker)
-
 	if err := r.SetStatus(ctx, checker, unknownStatus); err != nil {
 		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
 		return ctrl.Result{}, err
@@ -77,13 +74,9 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 	log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
 	// }
 
-	// if err := r.CreateResources(ctx, &req, checker); err != nil {
-	// 	log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
-	// }
-
-	// if err := r.PatchResources(ctx, &req, checker); err != nil {
-	// 	log.Log.Error(err, "Could not patch resources", "checker.Name", checker.Name)
-	// }
+	if err := r.ReconcileResources(ctx, &req, checker); err != nil {
+		log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
+	}
 
 	return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Second}, nil
 }
