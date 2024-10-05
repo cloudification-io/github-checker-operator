@@ -105,6 +105,10 @@ func (r *CheckerReconciler) CreateConfigMap(ctx context.Context, req *ctrl.Reque
 	}
 	if exists {
 		log.Log.Info("ConfigMap already exists, skipping creation", "ConfigMap.Name", newConfigMap.Name)
+		err := r.PatchConfigMap(ctx, req, checker)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -130,6 +134,10 @@ func (r *CheckerReconciler) CreateCronJob(ctx context.Context, req *ctrl.Request
 	}
 	if exists {
 		log.Log.Info("CronJob already exists, skipping creation", "CronJob.Name", newCronJob.Name)
+		err := r.PatchCronJob(ctx, req, checker)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -158,20 +166,7 @@ func (r *CheckerReconciler) ReconcileResources(ctx context.Context, req *ctrl.Re
 	return nil
 }
 
-func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
-	configMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, req.NamespacedName, configMap); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	patchConfigMap := r.RenderConfigMap(req, checker)
-	if err := controllerutil.SetControllerReference(checker, patchConfigMap, r.Scheme); err != nil {
-		return err
-	}
-	if err := r.Update(ctx, patchConfigMap); err != nil {
-		return err
-	}
-	log.Log.Info("ConfigMap updated successfully", "ConfigMap.Name", configMap.Name)
-
+func (r *CheckerReconciler) PatchCronJob(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
 	cronJob := &batchv1.CronJob{}
 	if err := r.Get(ctx, req.NamespacedName, cronJob); err != nil {
 		return client.IgnoreNotFound(err)
@@ -184,6 +179,23 @@ func (r *CheckerReconciler) PatchResources(ctx context.Context, req *ctrl.Reques
 		return err
 	}
 	log.Log.Info("CronJob updated successfully", "CronJob.Name", cronJob.Name)
+
+	return nil
+}
+
+func (r *CheckerReconciler) PatchConfigMap(ctx context.Context, req *ctrl.Request, checker *checkerv1.Checker) error {
+	configMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, req.NamespacedName, configMap); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	patchConfigMap := r.RenderConfigMap(req, checker)
+	if err := controllerutil.SetControllerReference(checker, patchConfigMap, r.Scheme); err != nil {
+		return err
+	}
+	if err := r.Update(ctx, patchConfigMap); err != nil {
+		return err
+	}
+	log.Log.Info("ConfigMap updated successfully", "ConfigMap.Name", configMap.Name)
 
 	return nil
 }
