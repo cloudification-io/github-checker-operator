@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"regexp"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,6 +20,7 @@ import (
 var cronJobLimitPointer int32 = 1
 var commonLabelKey string = "cloudification.io/checker"
 var unknownStatus string = "Unknown"
+var httpStatusCodeRegex = regexp.MustCompile(`\b(2\d{2}|3\d{2}|4\d{2}|5\d{2})\b`)
 
 func (r *CheckerReconciler) RenderConfigMap(req *ctrl.Request, checker *checkerv1.Checker) *corev1.ConfigMap {
 	thisConfigMap := &corev1.ConfigMap{
@@ -216,11 +218,17 @@ func (r *CheckerReconciler) UpdateStatus(ctx context.Context, req *ctrl.Request,
 }
 
 func (r *CheckerReconciler) SetStatus(ctx context.Context, checker *checkerv1.Checker, status string) error {
-	checker.Status.TargetStatus = status
+	if statusMatches := httpStatusCodeRegex.FindString(status); statusMatches != "" {
+		checker.Status.TargetStatus = statusMatches
+	} else {
+		checker.Status.TargetStatus = unknownStatus
+	}
+
 	if err := r.Status().Update(ctx, checker); err != nil {
 		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
 		return err
 	}
+
 	return nil
 }
 
@@ -232,9 +240,19 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 		return unknownStatus, err
 	}
 
-	firstPod := &podList.Items[0]
+	var latestPod *corev1.Pod
+	for _, pod := range podList.Items {
+		if latestPod == nil || pod.CreationTimestamp.After(latestPod.CreationTimestamp.Time) {
+			latestPod = &pod
+		}
+	}
+	if latestPod == nil {
+		return unknownStatus, fmt.Errorf("no pods found for checker: %s", checker.Name)
+	}
 
-	req := r.Clientset.CoreV1().Pods(checker.Namespace).GetLogs(firstPod.Name, &corev1.PodLogOptions{})
+	log.Log.Info("Looking up logs from found latest pod", "latestPod.Name", latestPod.Name)
+
+	req := r.Clientset.CoreV1().Pods(checker.Namespace).GetLogs(latestPod.Name, &corev1.PodLogOptions{})
 
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
@@ -243,9 +261,8 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 	defer podLogs.Close()
 
 	buf := new(bytes.Buffer)
-	_, err = buf.ReadFrom(podLogs)
-	if err != nil {
-		return "", err
+	if _, err = buf.ReadFrom(podLogs); err != nil {
+		return unknownStatus, err
 	}
 
 	return buf.String(), nil

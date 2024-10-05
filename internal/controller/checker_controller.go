@@ -65,20 +65,15 @@ func (r *CheckerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.SetStatus(ctx, checker, unknownStatus); err != nil {
-		log.Log.Error(err, "Unable to update Checker status", "checker.Name", checker.Name)
-		return ctrl.Result{}, err
-	}
-
-	// if err := r.UpdateStatus(ctx, &req, checker); err != nil {
-	// 	log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
-	// }
-
 	if err := r.ReconcileResources(ctx, &req, checker); err != nil {
 		log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
 	}
 
-	return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Second}, nil
+	if err := r.UpdateStatus(ctx, &req, checker); err != nil {
+		log.Log.Error(err, "Could not create resources", "checker.Name", checker.Name)
+	}
+
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
