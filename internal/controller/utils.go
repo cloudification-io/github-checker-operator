@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -245,6 +246,14 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 		return unknownStatus, err
 	}
 
+	podCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	err = r.waitForPodSucceeded(podCtx, checker.Namespace, latestPod.Name)
+	if err != nil {
+		return unknownStatus, err
+	}
+
 	log.Log.Info("Looking up logs from found latest pod", "latestPod.Name", latestPod.Name)
 	req := r.Clientset.CoreV1().Pods(checker.Namespace).GetLogs(latestPod.Name, &corev1.PodLogOptions{})
 
@@ -260,6 +269,28 @@ func (r *CheckerReconciler) getPodLogs(ctx context.Context, checker *checkerv1.C
 	}
 
 	return buf.String(), nil
+}
+
+func (r *CheckerReconciler) waitForPodSucceeded(ctx context.Context, namespace, podName string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context deadline exceeded waiting for pod %s to reach 'Succeeded' phase", podName)
+
+		default:
+			pod, err := r.Clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("error retrieving pod %s: %v", podName, err)
+			}
+
+			if pod.Status.Phase == corev1.PodSucceeded {
+				log.Log.Info("Pod has reached 'Succeeded' phase", "PodName", podName)
+				return nil
+			}
+
+			time.Sleep(time.Second)
+		}
+	}
 }
 
 func (r *CheckerReconciler) findLatestPod(pods []corev1.Pod) (*corev1.Pod, error) {
