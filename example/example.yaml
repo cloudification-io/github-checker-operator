@@ -1,0 +1,9 @@
+apiVersion: checker.cloudification.io/v1
+kind: Checker
+metadata:
+  labels:
+    app.kubernetes.io/name: github
+  name: github
+  namespace: checker
+spec:
+  targetUrl: https://github.com/

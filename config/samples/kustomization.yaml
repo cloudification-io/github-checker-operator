@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- checker_v1_checker.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
